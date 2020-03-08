@@ -29,5 +29,7 @@ print("Hello, World!")
 |}
 ```
 
+<img src="./fig/example.png">
+
 このようにかなり煩雑なコードが必要ですが，
 SATySFi の記述は [Rust 製の command-line program](https://github.com/monaqa/rust-satynx) によって自動で生成できます．
