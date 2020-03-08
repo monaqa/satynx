@@ -1,0 +1,102 @@
+@require: color
+@require: vdecoset
+@require: list
+@require: base/ref
+
+module Satynx : sig
+
+  val set-code-font : string -> unit
+
+  direct +satynx-code : [inline-text list;] block-cmd
+
+  direct \fg : [int * int * int; string;] inline-cmd
+
+end = struct
+
+  let code-font = Ref.make `lmmono`
+  let set-code-font fname = code-font |> Ref.set fname
+
+  % context of code {{{
+
+  let wrapping-mark ctx =
+    let ctx-clr = ctx |> set-text-color (Color.rgb 0.80 0.80 1.00) in
+    read-inline ctx-clr {↳}
+
+  % この inline-boxes を行頭につけて，
+  % すべての行が最低でも h の高さ， g の深さを持つようにする
+  let phantom-h ctx =
+    let (_, ht, dp) = get-natural-metrics (read-inline ctx {hg}) in
+    inline-graphics 0pt ht dp (fun _ -> [])
+
+  let smash-space ratio-space scr1 scr2 ctx =
+    ctx |> set-space-ratio-between-scripts 0.0 0.0 0.0 scr1 scr2
+        |> set-space-ratio-between-scripts 0.0 0.0 0.0 scr2 scr1
+
+  let ctxf-code ctx =
+    let ctx-codefont =
+      ctx
+        |> set-dominant-narrow-script Latin
+        |> set-dominant-wide-script Kana
+        |> set-language Kana Japanese
+        |> set-language HanIdeographic Japanese
+        |> set-language Latin English
+        |> set-font Latin (Ref.get code-font, 1., 0.)
+        |> set-font Kana  (Ref.get code-font, 1., 0.)
+        |> set-font HanIdeographic (Ref.get code-font, 1., 0.)
+        |> set-hyphen-min 100 100
+        |> set-word-break-penalty 10
+    in
+    let wid-sp = get-natural-width (read-inline ctx-codefont (embed-string `x`)) in
+    let font-size = get-font-size ctx-codefont in
+    let ratio-space = wid-sp /' font-size in
+    ctx-codefont
+      |> set-space-ratio ratio-space 0.0 0.0
+      |> smash-space ratio-space Kana Latin
+      |> smash-space 0.0 Kana HanIdeographic
+      |> smash-space ratio-space HanIdeographic Latin
+      |> set-paragraph-margin (font-size *' 0.4) (font-size *' 0.4)
+      |> set-min-gap-of-lines (font-size *' 0.4)
+      |> set-leading (font-size *' 0.4)
+      |> set-every-word-break inline-fil (phantom-h ctx-codefont ++ (wrapping-mark ctx))
+
+  % }}}
+
+  % block decoration {{{
+
+  let decoset-code =
+    VDecoSet.simple-frame 1pt (Color.gray 0.7) (Color.gray 1.0)
+
+  % }}}
+
+  % satynx-code {{{
+  let-block ctx +satynx-code inner-lst =
+    let ctx-code =
+      ctxf-code ctx |> set-font-size ((get-font-size ctx) *' 0.8)
+    in
+
+    let inner-bb-f ctx-tmp = 
+      let breakf inner =
+        line-break true true ctx-tmp
+          ((phantom-h ctx-tmp) ++ read-inline ctx-tmp inner ++ inline-fil)
+      in
+      let bb-lst = List.map breakf inner-lst in
+      List.fold-left (+++) block-nil bb-lst
+    in
+
+    let pads = (5pt, 5pt, 5pt, 5pt) in
+    block-frame-breakable ctx-code pads decoset-code inner-bb-f
+  % }}}
+
+  % inline-text decoration {{{
+
+  let-inline ctx \fg clr-int inner-str =
+    let to-rgb-float x = float(x) /. 255.0 in
+    let (r, g, b) = clr-int in
+    let clr = Color.rgb (to-rgb-float r) (to-rgb-float g) (to-rgb-float b) in
+    let ctx-clr = ctx |> set-text-color clr in
+    let ib = read-inline ctx-clr (embed-string inner-str) in
+    discretionary 1000 ib (ib ++ inline-fil) (phantom-h ctx ++ (wrapping-mark ctx))
+
+  % }}}
+
+end
